@@ -1,11 +1,104 @@
 <!DOCTYPE html>
 <html lang="ru">
 <head>
-  <meta charset="UTF-8">
+  <meta charset="UTF-8" />
   <title>Аудиокниги</title>
+  <style>
+    body { font-family: sans-serif; max-width: 800px; margin: auto; padding: 2rem; }
+    input { width: 100%; padding: 8px; margin-bottom: 1rem; }
+    ul { list-style: none; padding: 0; }
+    li { margin-bottom: 8px; }
+    audio { width: 100%; margin-top: 1rem; }
+    .track { cursor: pointer; padding: 5px; border: 1px solid #ddd; border-radius: 5px; }
+    .track:hover { background: #f0f0f0; }
+  </style>
 </head>
 <body>
-  <h1>Каталог аудиокниг</h1>
-  <p>Сайт в разработке...</p>
+  <h1>Аудиокниги</h1>
+  <input type="text" id="search" placeholder="Введите название книги..." />
+  <ul id="results"></ul>
+  <div id="player-container" style="display:none;">
+    <h2 id="book-title"></h2>
+    <ul id="track-list"></ul>
+    <audio id="audio-player" controls></audio>
+  </div>
+
+  <script>
+    const sheetID = "1_tsF4bkY20i0jyUCHvzQjwdh0PT_jJQf_Hf0NmmaLYk";
+    const sheetName = "Лист 1";
+    const url = `https://docs.google.com/spreadsheets/d/${sheetID}/gviz/tq?tqx=out:json&sheet=${encodeURIComponent(sheetName)}`;
+
+    let books = [];
+
+    fetch(url)
+      .then(res => res.text())
+      .then(text => JSON.parse(text.substr(47).slice(0, -2)))
+      .then(json => {
+        const rows = json.table.rows;
+        books = rows.map(r => {
+          const get = i => (r.c[i] ? r.c[i].v : "");
+          return {
+            author: get(0),
+            title: get(1),
+            links: [get(5), get(6), get(7)].filter(x => x).flatMap(x => x.split(',').map(s => s.trim()))
+          };
+        });
+      });
+
+    document.getElementById("search").addEventListener("input", function () {
+      const val = this.value.toLowerCase();
+      const matched = books.filter(b => b.title.toLowerCase().includes(val));
+      const list = document.getElementById("results");
+      list.innerHTML = "";
+      matched.forEach(book => {
+        const li = document.createElement("li");
+        li.textContent = `${book.author} — ${book.title}`;
+        li.classList.add("track");
+        li.onclick = () => showPlayer(book);
+        list.appendChild(li);
+      });
+    });
+
+    function showPlayer(book) {
+      document.getElementById("results").innerHTML = "";
+      document.getElementById("player-container").style.display = "block";
+      document.getElementById("book-title").textContent = `${book.author} — ${book.title}`;
+
+      const trackList = document.getElementById("track-list");
+      trackList.innerHTML = "";
+
+      const audio = document.getElementById("audio-player");
+      let currentTrack = 0;
+
+      function playTrack(index) {
+        currentTrack = index;
+        audio.src = book.links[index];
+        audio.play();
+        highlightTrack(index);
+      }
+
+      function highlightTrack(index) {
+        [...trackList.children].forEach((el, i) => {
+          el.style.background = i === index ? "#e0f7fa" : "";
+        });
+      }
+
+      audio.onended = () => {
+        if (currentTrack + 1 < book.links.length) {
+          playTrack(currentTrack + 1);
+        }
+      };
+
+      book.links.forEach((link, index) => {
+        const li = document.createElement("li");
+        li.textContent = `Глава ${index + 1}`;
+        li.classList.add("track");
+        li.onclick = () => playTrack(index);
+        trackList.appendChild(li);
+      });
+
+      playTrack(0);
+    }
+  </script>
 </body>
 </html>
