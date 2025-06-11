@@ -1,104 +1,147 @@
 <!DOCTYPE html>
 <html lang="ru">
 <head>
-  <meta charset="UTF-8" />
+  <meta charset="UTF-8">
   <title>Аудиокниги</title>
   <style>
-    body { font-family: sans-serif; max-width: 800px; margin: auto; padding: 2rem; }
-    input { width: 100%; padding: 8px; margin-bottom: 1rem; }
-    ul { list-style: none; padding: 0; }
-    li { margin-bottom: 8px; }
-    audio { width: 100%; margin-top: 1rem; }
-    .track { cursor: pointer; padding: 5px; border: 1px solid #ddd; border-radius: 5px; }
-    .track:hover { background: #f0f0f0; }
+    body {
+      font-family: sans-serif;
+      padding: 20px;
+      max-width: 800px;
+      margin: auto;
+      background: #f7f7f7;
+    }
+    h1 {
+      text-align: center;
+    }
+    input {
+      width: 100%;
+      padding: 10px;
+      margin: 10px 0;
+      font-size: 1em;
+    }
+    ul {
+      list-style: none;
+      padding: 0;
+    }
+    li {
+      margin: 5px 0;
+      cursor: pointer;
+      background: #fff;
+      padding: 8px;
+      border-radius: 4px;
+      border: 1px solid #ccc;
+    }
+    li:hover {
+      background: #e0f0ff;
+    }
+    audio {
+      width: 100%;
+      margin: 10px 0;
+    }
+    .track-list {
+      margin-top: 20px;
+    }
+    .hidden {
+      display: none;
+    }
   </style>
 </head>
 <body>
-  <h1>Аудиокниги</h1>
-  <input type="text" id="search" placeholder="Введите название книги..." />
+
+  <h1>Поиск аудиокниг</h1>
+  <input type="text" id="search" placeholder="Введите название книги...">
+
   <ul id="results"></ul>
-  <div id="player-container" style="display:none;">
-    <h2 id="book-title"></h2>
-    <ul id="track-list"></ul>
-    <audio id="audio-player" controls></audio>
+
+  <div class="track-list hidden" id="trackList">
+    <h2 id="bookTitle"></h2>
+    <ul id="trackLinks"></ul>
+    <audio id="player" controls></audio>
   </div>
 
   <script>
-    const sheetID = "1_tsF4bkY20i0jyUCHvzQjwdh0PT_jJQf_Hf0NmmaLYk";
-    const sheetName = "Лист 1";
-    const url = `https://docs.google.com/spreadsheets/d/${sheetID}/gviz/tq?tqx=out:json&sheet=${encodeURIComponent(sheetName)}`;
+    const url = 'https://docs.google.com/spreadsheets/d/1_tsF4bkY20i0jyUCHvzQjwdh0PT_jJQf_Hf0NmmaLYk/gviz/tq?tqx=out:json&sheet=Лист%201';
 
     let books = [];
 
     fetch(url)
       .then(res => res.text())
-      .then(text => JSON.parse(text.substr(47).slice(0, -2)))
-      .then(json => {
+      .then(text => {
+        const json = JSON.parse(text.substr(47).slice(0, -2));
         const rows = json.table.rows;
-        books = rows.map(r => {
-          const get = i => (r.c[i] ? r.c[i].v : "");
+
+        books = rows.map(row => {
+          const get = (i) => row.c[i] ? row.c[i].v : '';
           return {
             author: get(0),
             title: get(1),
-            links: [get(5), get(6), get(7)].filter(x => x).flatMap(x => x.split(',').map(s => s.trim()))
+            path: get(2),
+            yandex: get(3),
+            isCollection: get(4),
+            links: [get(5), get(6), get(7)]
+              .filter(Boolean)
+              .flatMap(link => link.split('\n').map(x => x.trim()).filter(x => x.endsWith('.mp3')))
           };
         });
+
+        updateSuggestions('');
       });
 
-    document.getElementById("search").addEventListener("input", function () {
-      const val = this.value.toLowerCase();
-      const matched = books.filter(b => b.title.toLowerCase().includes(val));
-      const list = document.getElementById("results");
-      list.innerHTML = "";
-      matched.forEach(book => {
-        const li = document.createElement("li");
-        li.textContent = `${book.author} — ${book.title}`;
-        li.classList.add("track");
-        li.onclick = () => showPlayer(book);
-        list.appendChild(li);
-      });
+    const searchInput = document.getElementById('search');
+    const resultsList = document.getElementById('results');
+    const trackList = document.getElementById('trackList');
+    const trackLinks = document.getElementById('trackLinks');
+    const bookTitle = document.getElementById('bookTitle');
+    const player = document.getElementById('player');
+
+    searchInput.addEventListener('input', () => {
+      updateSuggestions(searchInput.value);
     });
 
-    function showPlayer(book) {
-      document.getElementById("results").innerHTML = "";
-      document.getElementById("player-container").style.display = "block";
-      document.getElementById("book-title").textContent = `${book.author} — ${book.title}`;
+    function updateSuggestions(query) {
+      resultsList.innerHTML = '';
+      const q = query.trim().toLowerCase();
+      const matches = books.filter(book => book.title.toLowerCase().includes(q));
 
-      const trackList = document.getElementById("track-list");
-      trackList.innerHTML = "";
+      matches.forEach(book => {
+        const li = document.createElement('li');
+        li.textContent = `${book.title} — ${book.author}`;
+        li.onclick = () => showBook(book);
+        resultsList.appendChild(li);
+      });
+    }
 
-      const audio = document.getElementById("audio-player");
-      let currentTrack = 0;
-
-      function playTrack(index) {
-        currentTrack = index;
-        audio.src = book.links[index];
-        audio.play();
-        highlightTrack(index);
-      }
-
-      function highlightTrack(index) {
-        [...trackList.children].forEach((el, i) => {
-          el.style.background = i === index ? "#e0f7fa" : "";
-        });
-      }
-
-      audio.onended = () => {
-        if (currentTrack + 1 < book.links.length) {
-          playTrack(currentTrack + 1);
-        }
-      };
+    function showBook(book) {
+      bookTitle.textContent = `${book.title} — ${book.author}`;
+      trackLinks.innerHTML = '';
 
       book.links.forEach((link, index) => {
-        const li = document.createElement("li");
+        const li = document.createElement('li');
         li.textContent = `Глава ${index + 1}`;
-        li.classList.add("track");
-        li.onclick = () => playTrack(index);
-        trackList.appendChild(li);
+        li.onclick = () => {
+          player.src = link;
+          player.play();
+        };
+        trackLinks.appendChild(li);
       });
 
-      playTrack(0);
+      // автоматическое воспроизведение следующей главы
+      let current = 0;
+      player.onended = () => {
+        current++;
+        if (current < book.links.length) {
+          player.src = book.links[current];
+          player.play();
+        }
+      };
+      current = 0;
+      player.src = book.links[0];
+      player.play();
+
+      trackList.classList.remove('hidden');
     }
   </script>
+
 </body>
 </html>
